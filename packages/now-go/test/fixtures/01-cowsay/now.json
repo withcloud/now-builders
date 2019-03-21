@@ -3,7 +3,7 @@
   "builds": [
     {
       "src": "index.go",
-      "use": "now-go-mod-builder"
+      "use": "@now/go"
     }
   ],
   "probes": [
