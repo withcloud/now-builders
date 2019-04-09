@@ -15,6 +15,9 @@ jobs:
           name: Installing the latest version of Go
           command: sudo apt-get install golang-go
       - run:
+          name: Installing `@now/build-utils` for preinstall `@now/go`
+          command: yarn add @now/build-utils
+      - run:
           name: Installing dependencies
           command: yarn install
       - run:
