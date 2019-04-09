@@ -5,7 +5,6 @@ import { mkdirp } from 'fs-extra';
 import { dirname, join } from 'path';
 import Debug from 'debug';
 
-
 const debug = Debug('@now/go:go-helpers');
 const archMap = new Map([['x64', 'amd64'], ['x86', '386']]);
 const platformMap = new Map([['win32', 'windows']]);
@@ -43,56 +42,69 @@ function createGoPathTree(goPath: string, platform: string, arch: string) {
   ]);
 }
 
-async function get({ src }: any = {}) {
-  const args = ['get'];
-  if (src) {
-    debug('Fetching `go` dependencies for file %o', src);
-    args.push(src);
-  } else {
-    debug('Fetching `go` dependencies for cwd %o', this.cwd);
-  }
-  await this(...args);
-}
 
-async function build({ src, dest }: any) {
-  debug('Building `go` binary %o -> %o', src, dest);
-  let sources;
-  if (Array.isArray(src)) {
-    sources = src;
-  } else {
-    sources = [src];
+class GoWrapper {
+  private env: { [key: string]: string };
+  private opts: execa.Options;
+
+  constructor(
+    env: { [key: string]: string },
+    opts: execa.Options = {}
+  ) {
+    if (opts.cwd) {
+      opts.cwd = process.cwd();
+    }
+    this.env = env;
+    this.opts = opts;
   }
-  await this('build', '-o', dest, ...sources);
+
+  private execute(...args: string[]) {
+    const { opts, env } = this;
+    debug('Exec %o', `go ${args.join(' ')}`);
+    return execa('go', args, { stdio: 'inherit', ...opts, env });
+  }
+
+  mod() {
+    return this.execute('mod', 'tidy');
+  }
+
+  get(src?: string) {
+    const args = ['get'];
+    if (src) {
+      debug('Fetching `go` dependencies for file %o', src);
+      args.push(src);
+    } else {
+      debug('Fetching `go` dependencies for cwd %o', this.opts.cwd);
+    }
+    return this.execute(...args);
+  }
+
+  build(src: string | string[], dest: string) {
+    debug('Building `go` binary %o -> %o', src, dest);
+    const sources = Array.isArray(src) ? src : [src];
+    return this.execute('build', '-o', dest, ...sources);
+  }
 }
 
 export async function createGo(
   goPath: string,
   platform = process.platform,
   arch = process.arch,
-  opts: any = {},
+  opts: execa.Options = {},
   goMod = false,
 ) {
-  const env = {
+  const path = `${dirname(GO_BIN)}:${process.env.PATH}`;
+  const env: { [key: string]: string } = {
     ...process.env,
-    PATH: `${dirname(GO_BIN)}:${process.env.PATH}`,
+    PATH: path,
     GOPATH: goPath,
     ...opts.env,
   };
-
   if (goMod) {
     env.GO111MODULE = 'on';
   }
-
-  function go(...args: string[]) {
-    debug('Exec %o', `go ${args.join(' ')}`);
-    return execa('go', args, { stdio: 'inherit', ...opts, env });
-  }
-  go.cwd = opts.cwd || process.cwd();
-  go.get = get;
-  go.build = build;
-  go.goPath = goPath;
   await createGoPathTree(goPath, platform, arch);
-  return go;
+  return new GoWrapper(env, opts);
 }
 
 export async function downloadGo(

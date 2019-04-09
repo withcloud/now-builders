@@ -9,7 +9,7 @@ async function main() {
   // `go get` is not necessary because the program has no external deps.
   const src = join(__dirname, 'get-exported-function-name.go');
   const dest = join(__dirname, '../get-exported-function-name');
-  await go.build({ src, dest });
+  await go.build(src, dest);
 }
 
 main().catch((err) => {

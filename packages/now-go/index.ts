@@ -130,7 +130,7 @@ export const build = async ({ files, entrypoint }: BuildOptions) => {
     console.log('tidy go.mod file');
     try {
       // ensure go.mod up-to-date
-      await go('mod', 'tidy');
+      await go.mod();
     } catch (err) {
       console.log('failed to `go mod tidy`');
       throw err;
@@ -140,7 +140,7 @@ export const build = async ({ files, entrypoint }: BuildOptions) => {
     const destPath = join(outDir, 'handler');
     try {
       const src = [join(entrypointDirname, mainModGoFileName)];
-      await go.build({ src, dest: destPath });
+      await go.build(src, destPath);
     } catch (err) {
       console.log('failed to `go build`');
       throw err;
@@ -188,7 +188,7 @@ export const build = async ({ files, entrypoint }: BuildOptions) => {
         join(entrypointDirname, mainGoFileName),
         downloadedFiles[entrypoint].fsPath,
       ];
-      await go.build({ src, dest: destPath });
+      await go.build(src, destPath);
     } catch (err) {
       console.log('failed to `go build`');
       throw err;
