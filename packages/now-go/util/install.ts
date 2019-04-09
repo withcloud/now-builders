@@ -1,5 +1,5 @@
-const { join } = require('path');
-const { downloadGo } = require('../go-helpers');
+import { join } from 'path';
+import { downloadGo } from '../go-helpers';
 
 async function main() {
   // First download the `go` binary for this platform/arch.

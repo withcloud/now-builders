@@ -8,7 +8,7 @@
     "directory": "packages/now-go"
   },
   "scripts": {
-    "preinstall": "tsc go-helpers.ts --allowSyntheticDefaultImports --lib 'esnext'",
+    "preinstall": "tsc",
     "postinstall": "node ./util/install",
     "build": "tsc",
     "test": "tsc && jest",
