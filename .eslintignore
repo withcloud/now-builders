@@ -6,3 +6,4 @@
 /packages/now-node/dist/*
 /packages/now-node-bridge/*
 /packages/now-python/*
+/packages/now-go/*
