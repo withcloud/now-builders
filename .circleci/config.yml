@@ -16,7 +16,7 @@ jobs:
           command: sudo apt-get install golang-go
       - run:
           name: Installing `@now/build-utils` for preinstall `@now/go`
-          command: yarn add @now/build-utils
+          command: yarn add @now/build-utils -W
       - run:
           name: Installing dependencies
           command: yarn install
