@@ -8,6 +8,7 @@
     "directory": "packages/now-go"
   },
   "scripts": {
+    "preinstall": "tsc",
     "postinstall": "node ./util/install",
     "build": "tsc",
     "test": "tsc && jest",
