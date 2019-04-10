@@ -13,7 +13,7 @@ export const config = {
   maxLambdaSize: '10mb',
 };
 
-export const build = async ({ files, entrypoint }: BuildOptions) => {
+export async function build({ files, entrypoint }: BuildOptions) {
   console.log('Downloading user files...');
 
   const [goPath, outDir] = await Promise.all([
@@ -109,7 +109,7 @@ export const build = async ({ files, entrypoint }: BuildOptions) => {
     try {
       // default path
       let finalDestination = join(entrypointDirname, packageName, entrypoint);
-      const entrypointArr = entrypoint.split(sep)
+      const entrypointArr = entrypoint.split(sep);
 
       // if `entrypoint` include folder, only use filename
       if (entrypointArr.length > 1) {
