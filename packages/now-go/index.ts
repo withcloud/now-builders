@@ -91,9 +91,8 @@ export const build = async ({ files, entrypoint }: BuildOptions) => {
         join(entrypointDirname, 'go.mod'),
         'utf8',
       );
-      goPackageName = `${
-        goModContents.split('\n')[0].split(' ')[1]
-        }/${packageName}`;
+      const usrModName = goModContents.split('\n')[0].split(' ')[1];
+      goPackageName = `${usrModName}/${packageName}`;
     }
 
     const mainModGoContents = modMainGoContents
