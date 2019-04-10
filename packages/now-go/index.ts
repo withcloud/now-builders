@@ -13,7 +13,7 @@ export const config = {
   maxLambdaSize: '10mb',
 };
 
-export const build = async ({ files, entrypoint }: BuildOptions) => {
+export async function build({ files, entrypoint }: BuildOptions) {
   console.log('Downloading user files...');
 
   const [goPath, outDir] = await Promise.all([
