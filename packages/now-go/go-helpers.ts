@@ -51,7 +51,7 @@ class GoWrapper {
     env: { [key: string]: string },
     opts: execa.Options = {}
   ) {
-    if (opts.cwd) {
+    if (!opts.cwd) {
       opts.cwd = process.cwd();
     }
     this.env = env;
