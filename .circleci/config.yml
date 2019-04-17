@@ -13,7 +13,7 @@ jobs:
           command: sudo apt-get update
       - run:
           name: Installing the latest version of Go
-          command: sudo apt-get install golang-go
+          command: sudo apt-get install golang-go yarn
       - run:
           name: Installing @now/build-utils inside `packages/now-go`
           command: cd packages/now-go && yarn add @now/build-utils
