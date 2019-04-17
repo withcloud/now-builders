@@ -18,17 +18,11 @@ jobs:
           name: Installing latest version of yarn
           command: curl -L https://yarnpkg.com/install.sh | bash
       - run:
-          name: Source shell to use latest version of yarn
-          command: source /home/circleci/.bashrc
-      - run:
-          name: Installing @now/build-utils inside `packages/now-go`
-          command: cd packages/now-go && yarn add @now/build-utils
+          name: Bootstrapping
+          command: export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH" && yarn bootstrap
       - run:
           name: Installing dependencies
           command: export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH" && yarn install
-      - run:
-          name: Bootstrapping
-          command: yarn bootstrap
       - run:
           name: Building
           command: ./.circleci/build.sh
