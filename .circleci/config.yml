@@ -18,6 +18,9 @@ jobs:
           name: Installing latest version of yarn
           command: curl -L https://yarnpkg.com/install.sh | bash
       - run:
+          name: Source shell to use latest version of yarn
+          command: source /home/circleci/.bashrc
+      - run:
           name: Installing @now/build-utils inside `packages/now-go`
           command: cd packages/now-go && yarn add @now/build-utils
       - run:
