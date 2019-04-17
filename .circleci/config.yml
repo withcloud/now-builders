@@ -16,7 +16,7 @@ jobs:
           command: sudo apt-get install golang-go
       - run:
           name: Installing @now/build-utils with npm
-          command: npm install -g @now/build-utils
+          command: npm install @now/build-utils
       - run:
           name: Installing dependencies
           command: yarn install
