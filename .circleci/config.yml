@@ -7,6 +7,9 @@ jobs:
     environment:
       GOPATH: $HOME/go
     steps:
+      - run:
+          name: Installing @now/build-utils with npm
+          command: npm install @now/build-utils
       - checkout
       - run:
           name: Updating apt-get list
@@ -14,9 +17,6 @@ jobs:
       - run:
           name: Installing the latest version of Go
           command: sudo apt-get install golang-go
-      - run:
-          name: Installing @now/build-utils with npm
-          command: npm install @now/build-utils
       - run:
           name: Installing dependencies
           command: yarn install
