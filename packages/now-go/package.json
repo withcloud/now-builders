@@ -8,7 +8,7 @@
     "directory": "packages/now-go"
   },
   "scripts": {
-    "postinstall": "node ./util/install",
+    "postinstall": "tsc && node ./util/install",
     "build": "tsc",
     "test": "tsc && jest",
     "prepublish": "tsc"
