@@ -11,7 +11,7 @@
     "build": "tsc",
     "test": "tsc && jest",
     "prepublish": "tsc",
-    "postinstall": "yarn add @now/build-utils -P && tsc && node ./util/install"
+    "postinstall": "yarn build && node ./util/install"
   },
   "files": [
     "*.js",
