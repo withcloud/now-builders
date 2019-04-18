@@ -16,7 +16,7 @@ jobs:
           command: sudo apt-get install golang-go
       - run:
           name: Installing dependencies
-          command: npm i @now/build-utils && yarn install
+          command: cd packages/now-go && npm i @now/build-utils && cd ../../ && yarn install
       - run:
           name: Bootstrapping
           command: yarn bootstrap
