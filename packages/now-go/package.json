@@ -8,10 +8,10 @@
     "directory": "packages/now-go"
   },
   "scripts": {
-    "postinstall": "tsc && node ./util/install",
     "build": "tsc",
     "test": "tsc && jest",
-    "prepublish": "tsc"
+    "prepublish": "tsc",
+    "postinstall": "yarn install && tsc && node ./util/install"
   },
   "files": [
     "*.js",

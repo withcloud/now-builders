@@ -15,11 +15,8 @@ jobs:
           name: Installing the latest version of Go
           command: sudo apt-get install golang-go
       - run:
-          name: Installing latest version of yarn
-          command: curl -L https://yarnpkg.com/install.sh | bash
-      - run:
           name: Installing dependencies
-          command: export PATH="$HOME/.yarn/bin:$HOME/.config/yarn/global/node_modules/.bin:$PATH" && yarn install
+          command: yarn install
       - run:
           name: Bootstrapping
           command: yarn bootstrap
