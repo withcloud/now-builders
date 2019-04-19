@@ -4,10 +4,18 @@ import {
 } from 'fs-extra';
 
 import {
-  glob, download, createLambda, getWriteableDirectory, BuildOptions
+  glob, download, createLambda, getWriteableDirectory, BuildOptions, shouldServe,
 } from '@now/build-utils';
 
-import { createGo, getExportedFunctionName } from './go-helpers';
+import { createGo, getAnalysedEntrypoint } from './go-helpers';
+
+interface Analysed {
+  packageName: string;
+  functionName: string;
+  watch: string[];
+}
+
+export const version = 2;
 
 export const config = {
   maxLambdaSize: '10mb',
@@ -25,9 +33,9 @@ export async function build({ files, entrypoint }: BuildOptions) {
   const downloadedFiles = await download(files, srcPath);
 
   console.log(`Parsing AST for "${entrypoint}"`);
-  let parseFunctionName;
+  let analysed;
   try {
-    parseFunctionName = await getExportedFunctionName(
+    analysed = await getAnalysedEntrypoint(
       downloadedFiles[entrypoint].fsPath,
     );
   } catch (err) {
@@ -35,7 +43,7 @@ export async function build({ files, entrypoint }: BuildOptions) {
     throw err;
   }
 
-  if (!parseFunctionName) {
+  if (!analysed) {
     const err = new Error(
       `Could not find an exported function in "${entrypoint}"`,
     );
@@ -43,8 +51,11 @@ export async function build({ files, entrypoint }: BuildOptions) {
     throw err;
   }
 
-  const handlerFunctionName = parseFunctionName.split(',')[0];
+  const parsedAnalysed = JSON.parse(analysed) as Analysed
+  console.log('parsedAnalysed')
+  console.log(parsedAnalysed);
 
+  const handlerFunctionName = parsedAnalysed.functionName;
   console.log(
     `Found exported function "${handlerFunctionName}" in "${entrypoint}"`,
   );
@@ -54,7 +65,7 @@ export async function build({ files, entrypoint }: BuildOptions) {
   const entrypointDirname = dirname(downloadedFiles[entrypoint].fsPath);
 
   // check if package name other than main
-  const packageName = parseFunctionName.split(',')[1];
+  const packageName = parsedAnalysed.packageName;
   const isGoModExist = await pathExists(join(entrypointDirname, 'go.mod'));
   if (packageName !== 'main') {
     const go = await createGo(
@@ -202,6 +213,11 @@ export async function build({ files, entrypoint }: BuildOptions) {
   });
 
   return {
-    [entrypoint]: lambda,
+    output: {
+      [entrypoint]: lambda,
+    },
+    watch: parsedAnalysed.watch
   };
 }
+
+export { shouldServe };

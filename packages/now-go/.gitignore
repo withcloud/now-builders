@@ -2,5 +2,5 @@ node_modules
 *.log
 /?.js
 /go
-/get-exported-function-name
+/analyse
 *.js
