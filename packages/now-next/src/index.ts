@@ -186,7 +186,7 @@ export const build = async ({
 
       urls[entrypoint] = `http://localhost:${openPort}`;
 
-      const command = [ 'next', 'dev', entrypointDir, '--port', `${openPort}` ];
+      const command = [ 'next', 'dev', '--port', `${openPort}` ];
       console.log(`${name} Running \`${command.join(' ')}\``);
 
       const { stdout, stderr } = execa('npx', command, {
