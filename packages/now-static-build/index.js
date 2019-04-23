@@ -48,3 +48,9 @@ exports.build = async ({
 
   throw new Error('Proper build script must be specified as entrypoint');
 };
+
+exports.shouldServe = async ({ config, requestPath, workPath }) => {
+  const distDir = (config && config.distDir) || 'dist';
+  const destFile = path.join(workPath, distDir, requestPath);
+  return existsSync(destFile);
+};
