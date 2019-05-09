@@ -275,9 +275,11 @@ export async function build({
     }
   }
 
+  const platformHandler =
+    process.platform === 'win32' ? 'handler.exe' : 'handler';
   const lambda = await createLambda({
     files: { ...(await glob('**', outDir)), ...includedFiles },
-    handler: 'handler',
+    handler: platformHandler,
     runtime: 'go1.x',
     environment: {},
   });

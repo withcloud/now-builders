@@ -1,4 +1,5 @@
 import tar from 'tar';
+import unzipper from 'unzipper';
 import execa from 'execa';
 import fetch from 'node-fetch';
 import { mkdirp, pathExists } from 'fs-extra';
@@ -12,7 +13,7 @@ const platformMap = new Map([['win32', 'windows']]);
 
 // Location where the `go` binary will be installed after `postinstall`
 const GO_DIR = join(__dirname, 'go');
-const GO_BIN = join(GO_DIR, 'bin/go');
+const GO_BIN = join(GO_DIR, 'bin', 'go');
 
 const getPlatform = (p: string) => platformMap.get(p) || p;
 const getArch = (a: string) => archMap.get(a) || a;
@@ -30,7 +31,7 @@ export async function getAnalyzedEntrypoint(filePath: string) {
   const isAnalyzeExist = await pathExists(bin);
   if (!isAnalyzeExist) {
     const src = join(__dirname, 'util', 'analyze.go');
-    const dest = join(__dirname, 'analyze');
+    const dest = bin;
     const go = await downloadGo();
     await go.build(src, dest);
   }
@@ -87,8 +88,16 @@ class GoWrapper {
 
   build(src: string | string[], dest: string, ldsflags = '-s -w') {
     debug('Building optimized `go` binary %o -> %o', src, dest);
+    const platformDest = process.platform === 'win32' ? `${dest}.exe` : dest;
     const sources = Array.isArray(src) ? src : [src];
-    return this.execute('build', '-ldflags', ldsflags, '-o', dest, ...sources);
+    return this.execute(
+      'build',
+      '-ldflags',
+      ldsflags,
+      '-o',
+      platformDest,
+      ...sources
+    );
   }
 }
 
@@ -99,13 +108,24 @@ export async function createGo(
   opts: execa.Options = {},
   goMod = false
 ) {
-  const path = `${dirname(GO_BIN)}:${process.env.PATH}`;
-  const env: { [key: string]: string } = {
-    ...process.env,
-    PATH: path,
-    GOPATH: goPath,
-    ...opts.env,
-  };
+  let env: { [key: string]: string };
+
+  if (platform === 'win32') {
+    env = {
+      ...process.env,
+      Path: `${dirname(GO_BIN)};${process.env.PATH}`,
+      GOPATH: goPath,
+      ...opts.env,
+    };
+  } else {
+    env = {
+      ...process.env,
+      PATH: `${dirname(GO_BIN)}:${process.env.PATH}`,
+      GOPATH: goPath,
+      ...opts.env,
+    };
+  }
+
   if (goMod) {
     env.GO111MODULE = 'on';
   }
@@ -146,15 +166,24 @@ export async function downloadGo(
         throw new Error(`Failed to download: ${url} (${res.status})`);
       }
 
-      // TODO: use a zip extractor when `ext === "zip"`
-      await mkdirp(dir);
-      await new Promise((resolve, reject) => {
-        res.body
-          .on('error', reject)
-          .pipe(tar.extract({ cwd: dir, strip: 1 }))
-          .on('error', reject)
-          .on('finish', resolve);
-      });
+      if (url.includes('zip')) {
+        await new Promise((resolve, reject) => {
+          res.body
+            .on('error', reject)
+            .pipe(unzipper.Extract({ path: __dirname }))
+            .on('error', reject)
+            .on('finish', resolve);
+        });
+      } else {
+        await mkdirp(dir);
+        await new Promise((resolve, reject) => {
+          res.body
+            .on('error', reject)
+            .pipe(tar.extract({ cwd: dir, strip: 1 }))
+            .on('error', reject)
+            .on('finish', resolve);
+        });
+      }
     }
     return createGo(dir, platform, arch);
   }
