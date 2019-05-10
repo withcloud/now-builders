@@ -114,6 +114,7 @@ export async function createGo(
     env = {
       ...process.env,
       Path: `${dirname(GO_BIN)};${process.env.PATH}`,
+      PATH: `${dirname(GO_BIN)};${process.env.PATH}`,
       GOPATH: goPath,
       ...opts.env,
     };
@@ -131,6 +132,12 @@ export async function createGo(
   }
   await createGoPathTree(goPath, platform, arch);
   return new GoWrapper(env, opts);
+}
+
+function extractor(dir?: string) {
+  return process.platform === 'win32'
+    ? unzipper.Extract({ path: __dirname })
+    : tar.extract({ cwd: dir, strip: 1 });
 }
 
 export async function downloadGo(
@@ -166,24 +173,14 @@ export async function downloadGo(
         throw new Error(`Failed to download: ${url} (${res.status})`);
       }
 
-      if (url.includes('zip')) {
-        await new Promise((resolve, reject) => {
-          res.body
-            .on('error', reject)
-            .pipe(unzipper.Extract({ path: __dirname }))
-            .on('error', reject)
-            .on('finish', resolve);
-        });
-      } else {
-        await mkdirp(dir);
-        await new Promise((resolve, reject) => {
-          res.body
-            .on('error', reject)
-            .pipe(tar.extract({ cwd: dir, strip: 1 }))
-            .on('error', reject)
-            .on('finish', resolve);
-        });
-      }
+      await mkdirp(dir);
+      await new Promise((resolve, reject) => {
+        res.body
+          .on('error', reject)
+          .pipe(extractor(dir))
+          .on('error', reject)
+          .on('finish', resolve);
+      });
     }
     return createGo(dir, platform, arch);
   }
