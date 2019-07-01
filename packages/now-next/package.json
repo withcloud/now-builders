@@ -1,6 +1,6 @@
 {
   "name": "@now/next",
-  "version": "0.4.1-canary.17",
+  "version": "0.4.1-canary.18",
   "license": "MIT",
   "main": "./dist/index",
   "scripts": {
