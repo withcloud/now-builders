@@ -1,5 +1,4 @@
 import { basename, dirname, join, relative, resolve, sep } from 'path';
-import { satisfies } from 'semver';
 import nodeFileTrace from '@zeit/node-file-trace';
 import {
   glob,
@@ -61,15 +60,11 @@ async function downloadInstallAndBundle({
 
   console.log("installing dependencies for user's code...");
   const entrypointFsDirname = join(workPath, dirname(entrypoint));
-  const nodeVersion = await getNodeVersion(entrypointFsDirname);
-
-  if (meta.isDev && !satisfies(process.version, nodeVersion.range)) {
-    console.log(
-      `WARN: Your current version of \`node\` (${
-        process.version
-      }) does not match the requested range (${nodeVersion.range})`
-    );
-  }
+  const nodeVersion = await getNodeVersion(
+    entrypointFsDirname,
+    undefined,
+    meta.isDev
+  );
 
   const spawnOpts = getSpawnOptions(meta, nodeVersion);
   await runNpmInstall(entrypointFsDirname, ['--prefer-offline'], spawnOpts);

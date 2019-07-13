@@ -2,6 +2,7 @@ import assert from 'assert';
 import fs from 'fs-extra';
 import path from 'path';
 import spawn from 'cross-spawn';
+import { satisfies } from 'semver';
 import { SpawnOptions } from 'child_process';
 import { deprecate } from 'util';
 import { Meta, PackageJson, NodeVersion } from '../types';
@@ -75,13 +76,25 @@ export function getSpawnOptions(
 
 export async function getNodeVersion(
   destPath: string,
-  minNodeVersion?: string
+  minNodeVersion?: string,
+  isDev: boolean = false
 ): Promise<NodeVersion> {
   const { packageJson } = await scanParentDirs(destPath, true);
   const range =
     (packageJson && packageJson.engines && packageJson.engines.node) ||
     minNodeVersion;
-  return getSupportedNodeVersion(range, typeof minNodeVersion !== 'undefined');
+  const silent = typeof minNodeVersion !== 'undefined';
+  const nodeVersion = await getSupportedNodeVersion(range, silent);
+
+  if (isDev && !satisfies(process.version, nodeVersion.range)) {
+    console.log(
+      `WARN: Your version of \`node\` (${
+        process.version
+      }) does not match the requested range (${nodeVersion.range})`
+    );
+  }
+
+  return nodeVersion;
 }
 
 async function scanParentDirs(destPath: string, readPackageJson = false) {

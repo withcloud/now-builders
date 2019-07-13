@@ -174,18 +174,18 @@ export const build = async ({
   const pkg = await readPackageJson(entryPath);
   const nextVersion = getNextVersion(pkg);
 
-  if (!meta.isDev) {
-    await createServerlessConfig(workPath);
-  }
-
-  const nodeVersion = await getNodeVersion(entryPath);
-  const spawnOpts = getSpawnOptions(meta, nodeVersion);
-
   if (!nextVersion) {
     throw new Error(
       'No Next.js version could be detected in "package.json". Make sure `"next"` is installed in "dependencies" or "devDependencies"'
     );
   }
+
+  if (!meta.isDev) {
+    await createServerlessConfig(workPath);
+  }
+
+  const nodeVersion = await getNodeVersion(entryPath, undefined, meta.isDev);
+  const spawnOpts = getSpawnOptions(meta, nodeVersion);
 
   if (meta.isDev) {
     let childProcess: ChildProcess | undefined;

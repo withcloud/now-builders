@@ -169,7 +169,11 @@ export async function build({
       }
     }
 
-    const nodeVersion = await getNodeVersion(entrypointDir, minNodeRange);
+    const nodeVersion = await getNodeVersion(
+      entrypointDir,
+      minNodeRange,
+      meta.isDev
+    );
     const spawnOpts = getSpawnOptions(meta, nodeVersion);
 
     await runNpmInstall(entrypointDir, ['--prefer-offline'], spawnOpts);
