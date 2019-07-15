@@ -1,4 +1,5 @@
 import { basename, dirname, join, relative, resolve, sep } from 'path';
+import { pathExists, readFile, writeFile } from 'fs-extra';
 import nodeFileTrace from '@zeit/node-file-trace';
 import {
   glob,
@@ -23,6 +24,7 @@ import { readFileSync, lstatSync, readlinkSync } from 'fs';
 import { Compile } from './typescript';
 
 interface CompilerConfig {
+  dist?: string;
   debug?: boolean;
   includeFiles?: string | string[];
   excludeFiles?: string | string[];
@@ -49,6 +51,65 @@ function isSymbolicLink(mode: number): boolean {
   return (mode & S_IFMT) === S_IFLNK;
 }
 
+async function readPackageJson(entryPath: string) {
+  let currentDestPath = entryPath;
+  let packageJson = {};
+  let packageJsonPath;
+  while (true) {
+    packageJsonPath = join(currentDestPath, 'package.json');
+    console.log('readPackageJson', packageJsonPath);
+    if (await pathExists(packageJsonPath)) {
+      try {
+        // eslint-disable-next-line no-await-in-loop
+        packageJson = JSON.parse(await readFile(packageJsonPath, 'utf8'));
+      } catch (err) {
+        console.log('package.json not found in entry');
+      }
+      break;
+    }
+    const newDestPath = dirname(currentDestPath);
+    if (currentDestPath === newDestPath) break;
+    currentDestPath = newDestPath;
+  }
+  return { packageJson, packageJsonPath };
+}
+
+async function writePackageJson(packageJsonPath: string, packageJson: Object) {
+  await writeFile(packageJsonPath, JSON.stringify(packageJson, null, 2));
+}
+
+type stringMap = { [key: string]: string };
+
+function normalizePackageJson(
+  defaultPackageJson: {
+    dependencies?: stringMap;
+    devDependencies?: stringMap;
+    scripts?: stringMap;
+  } = {}
+) {
+  const dependencies: stringMap = {
+    ...defaultPackageJson.dependencies,
+  };
+  const devDependencies: stringMap = {
+    ...defaultPackageJson.devDependencies,
+  };
+  if (devDependencies['aws-sdk']) {
+    delete devDependencies['aws-sdk'];
+  }
+  return {
+    ...defaultPackageJson,
+    dependencies: {
+      ...dependencies,
+    },
+    devDependencies: {
+      ...devDependencies,
+    },
+    scripts: {
+      ...defaultPackageJson.scripts,
+    },
+  };
+}
+
 async function downloadInstallAndBundle({
   files,
   entrypoint,
@@ -57,6 +118,18 @@ async function downloadInstallAndBundle({
 }: DownloadOptions) {
   console.log('downloading user files...');
   const downloadedFiles = await download(files, workPath, meta);
+
+  // --- added ---
+  if (!meta || !meta.isDev) {
+    const entryDirectory = dirname(entrypoint);
+    const entryPath = join(workPath, entryDirectory);
+    const pkg = await readPackageJson(entryPath);
+    console.log('normalizing package.json');
+    const packageJson = normalizePackageJson(pkg.packageJson);
+    console.log('normalized package.json result: ', packageJson);
+    await writePackageJson(pkg.packageJsonPath, packageJson);
+  }
+  // --- added ---
 
   console.log("installing dependencies for user's code...");
   const entrypointFsDirname = join(workPath, dirname(entrypoint));
@@ -79,7 +152,15 @@ async function compile(
   shouldAddSourcemapSupport: boolean;
   watch: string[];
 }> {
-  const inputFiles = new Set<string>([entrypointPath]);
+  // --- added ---
+  let input = entrypointPath;
+  if (config && config.dist) {
+    input = entrypointPath.replace(new RegExp(`src/`), `${config.dist}/`);
+  }
+  console.log('[now-node] input', input);
+  // --- added ---
+
+  const inputFiles = new Set<string>([input]);
 
   const sourceCache = new Map<string, string | Buffer | null>();
   const fsCache = new Map<string, File>();
@@ -200,6 +281,7 @@ async function compile(
     console.log('\t' + fileList.join('\n\t'));
   }
 
+  // console.log('[now-node] fileList', fileList)
   for (const path of fileList) {
     let entry = fsCache.get(path);
     if (!entry) {
@@ -229,7 +311,16 @@ async function compile(
       preparedFiles[
         path.slice(0, -3 - Number(path.endsWith('x'))) + '.js'
       ] = entry;
-    } else preparedFiles[path] = entry;
+    } else {
+      // --- added ---
+      let filePath = path;
+      if (config && config.dist && !path.includes('node_modules')) {
+        filePath = path.replace(new RegExp(`${config.dist}/`), `src/`);
+      }
+      // console.log('[now-node] filePath', filePath)
+      // --- added ---
+      preparedFiles[filePath] = entry;
+    }
   }
 
   // Compile ES Modules into CommonJS
