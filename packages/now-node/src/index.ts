@@ -439,6 +439,12 @@ export async function build({
     runtime,
   });
 
+  console.log(
+    '[now-node] entrypoint:',
+    entrypoint,
+    `, ${Buffer.byteLength(lambda.zipBuffer, 'utf8')} bytes`
+  );
+
   const output = { [entrypoint]: lambda };
   const result = { output, watch };
   return result;
