@@ -1,6 +1,6 @@
 {
   "name": "@now/next",
-  "version": "0.4.1-canary.28",
+  "version": "0.4.1-canary.29",
   "license": "MIT",
   "main": "./dist/index",
   "homepage": "https://zeit.co/docs/v2/deployments/official-builders/next-js-now-next",
@@ -14,7 +14,6 @@
     "url": "https://github.com/zeit/now-builders.git",
     "directory": "packages/now-next"
   },
-  "dependencies": {},
   "files": [
     "dist"
   ],
