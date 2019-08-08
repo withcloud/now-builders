@@ -17,10 +17,11 @@ import {
   PrepareCacheOptions,
   BuildOptions,
   shouldServe,
+  Config,
 } from '@now/build-utils';
 export { NowRequest, NowResponse } from './types';
 import { makeLauncher } from './launcher';
-import { readFileSync, lstatSync, readlinkSync } from 'fs';
+import { readFileSync, lstatSync, readlinkSync, statSync } from 'fs';
 import { Compile } from './typescript';
 
 interface CompilerConfig {
@@ -34,6 +35,7 @@ interface DownloadOptions {
   files: Files;
   entrypoint: string;
   workPath: string;
+  config: Config;
   meta: Meta;
 }
 
@@ -114,10 +116,13 @@ async function downloadInstallAndBundle({
   files,
   entrypoint,
   workPath,
+  config,
   meta,
 }: DownloadOptions) {
   console.log('downloading user files...');
+  const downloadTime = Date.now();
   const downloadedFiles = await download(files, workPath, meta);
+  console.log(`download complete [${Date.now() - downloadTime}ms]`);
 
   // --- added ---
   if (!meta || !meta.isDev) {
@@ -132,10 +137,16 @@ async function downloadInstallAndBundle({
   // --- added ---
 
   console.log("installing dependencies for user's code...");
+  const installTime = Date.now();
   const entrypointFsDirname = join(workPath, dirname(entrypoint));
-  const nodeVersion = await getNodeVersion(entrypointFsDirname);
+  const nodeVersion = await getNodeVersion(
+    entrypointFsDirname,
+    undefined,
+    config
+  );
   const spawnOpts = getSpawnOptions(meta, nodeVersion);
   await runNpmInstall(entrypointFsDirname, ['--prefer-offline'], spawnOpts);
+  console.log(`install complete [${Date.now() - installTime}ms]`);
 
   const entrypointPath = downloadedFiles[entrypoint].fsPath;
   return { entrypointPath, entrypointFsDirname, nodeVersion, spawnOpts };
@@ -145,8 +156,7 @@ async function compile(
   workPath: string,
   entrypointPath: string,
   entrypoint: string,
-  config: CompilerConfig,
-  { isDev, filesChanged, filesRemoved }: Meta
+  config: CompilerConfig
 ): Promise<{
   preparedFiles: Files;
   shouldAddSourcemapSupport: boolean;
@@ -242,8 +252,8 @@ async function compile(
 
   const { fileList, esmFileList } = await nodeFileTrace([...inputFiles], {
     base: workPath,
-    filterBase: true,
     ts: true,
+    mixedModules: true,
     ignore: config.excludeFiles,
     readFile(fsPath: string): Buffer | string | null {
       const relPath = relative(workPath, fsPath);
@@ -303,8 +313,12 @@ async function compile(
       if (
         !symlinkTarget.startsWith('..' + sep) &&
         fileList.indexOf(symlinkTarget) === -1
-      )
-        fileList.push(symlinkTarget);
+      ) {
+        const stats = statSync(resolve(workPath, symlinkTarget));
+        if (stats.isFile()) {
+          fileList.push(symlinkTarget);
+        }
+      }
     }
     // Rename .ts -> .js (except for entry)
     if (path !== entrypoint && tsCompiled.has(path)) {
@@ -381,20 +395,24 @@ export async function build({
     files,
     entrypoint,
     workPath,
+    config,
     meta,
   });
 
   console.log('running user script...');
+  const runScriptTime = Date.now();
   await runPackageJsonScript(entrypointFsDirname, 'now-build', spawnOpts);
+  console.log(`script complete [${Date.now() - runScriptTime}ms]`);
 
   console.log('tracing input files...');
+  const traceTime = Date.now();
   const { preparedFiles, shouldAddSourcemapSupport, watch } = await compile(
     workPath,
     entrypointPath,
     entrypoint,
-    config,
-    meta
+    config
   );
+  console.log(`trace complete [${Date.now() - traceTime}ms]`);
 
   const launcherFiles: Files = {
     [`${LAUNCHER_FILENAME}.js`]: new FileBlob({
@@ -408,7 +426,7 @@ export async function build({
       }),
     }),
     [`${BRIDGE_FILENAME}.js`]: new FileFsRef({
-      fsPath: require('@now/node-bridge'),
+      fsPath: join(__dirname, 'bridge.js'),
     }),
   };
 
