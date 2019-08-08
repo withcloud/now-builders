@@ -7,10 +7,12 @@ import {
 } from 'fs-extra';
 import os from 'os';
 import path from 'path';
+import resolveFrom from 'resolve-from';
 import semver from 'semver';
 
 import {
   BuildOptions,
+  Config,
   createLambda,
   download,
   FileBlob,
@@ -21,17 +23,19 @@ import {
   glob,
   Lambda,
   PrepareCacheOptions,
+  Route,
   runNpmInstall,
   runPackageJsonScript,
-  Route,
   debug,
 } from '@now/build-utils';
+import nodeFileTrace from '@zeit/node-file-trace';
 
 import createServerlessConfig from './create-serverless-config';
 import nextLegacyVersions from './legacy-versions';
 import {
   EnvConfig,
   excludeFiles,
+  ExperimentalTraceVersion,
   filesFromDirectory,
   getDynamicRoutes,
   getNextConfig,
@@ -157,6 +161,7 @@ export const build = async ({
   files,
   workPath,
   entrypoint,
+  config = {} as Config,
   meta = {} as BuildParamsMeta,
 }: BuildParamsType): Promise<{
   routes: Route[];
@@ -176,11 +181,7 @@ export const build = async ({
   const pkg = await readPackageJson(entryPath);
   const nextVersion = getNextVersion(pkg);
 
-  if (!meta.isDev) {
-    await createServerlessConfig(workPath);
-  }
-
-  const nodeVersion = await getNodeVersion(entryPath);
+  const nodeVersion = await getNodeVersion(entryPath, undefined, config);
   const spawnOpts = getSpawnOptions(meta, nodeVersion);
 
   if (!nextVersion) {
@@ -284,6 +285,20 @@ export const build = async ({
   debug('installing dependencies...');
   await runNpmInstall(entryPath, ['--prefer-offline'], spawnOpts);
 
+  let realNextVersion: string | undefined;
+  try {
+    realNextVersion = require(resolveFrom(entryPath, 'next/package.json'))
+      .version;
+
+    debug(`detected Next.js version: ${realNextVersion}`);
+  } catch (_ignored) {
+    console.warn(`could not identify real Next.js version, that's OK!`);
+  }
+
+  if (!isLegacy) {
+    await createServerlessConfig(workPath, realNextVersion);
+  }
+
   debug('running user script...');
   const memoryToConsume = Math.floor(os.totalmem() / 1024 ** 2) - 128;
   const env = { ...spawnOpts.env } as any;
@@ -332,7 +347,7 @@ export const build = async ({
     );
     const launcherFiles = {
       'now__bridge.js': new FileFsRef({
-        fsPath: require('@now/node-bridge'),
+        fsPath: path.join(__dirname, 'now__bridge.js'),
       }),
     };
     const nextFiles: { [key: string]: FileFsRef } = {
@@ -394,14 +409,6 @@ export const build = async ({
     );
   } else {
     debug('preparing lambda files...');
-    const launcherFiles = {
-      'now__bridge.js': new FileFsRef({
-        fsPath: require('@now/node-bridge'),
-      }),
-      'now__launcher.js': new FileFsRef({
-        fsPath: path.join(__dirname, 'launcher.js'),
-      }),
-    };
     const pagesDir = path.join(entryPath, '.next', 'serverless', 'pages');
 
     const pages = await glob('**/*.js', pagesDir);
@@ -440,18 +447,77 @@ export const build = async ({
       );
     }
 
-    // An optional assets folder that is placed alongside every page entrypoint
-    const assets = await glob(
-      'assets/**',
-      path.join(entryPath, '.next', 'serverless')
-    );
-
-    const assetKeys = Object.keys(assets);
-    if (assetKeys.length > 0) {
-      debug('detected assets to be bundled with lambda:');
-      assetKeys.forEach(assetFile => debug(`\t${assetFile}`));
+    // Assume tracing to be safe, bail if we know we don't need it.
+    let requiresTracing = true;
+    try {
+      if (
+        realNextVersion &&
+        semver.satisfies(realNextVersion, `<${ExperimentalTraceVersion}`)
+      ) {
+        if (config.debug) {
+          debug(
+            'Next.js version is too old for us to trace the required dependencies.\n' +
+              'Assuming Next.js has handled it!'
+          );
+        }
+        requiresTracing = false;
+      }
+    } catch (err) {
+      if (config.debug) {
+        debug(
+          'Failed to check Next.js version for tracing compatibility: ' + err
+        );
+      }
     }
 
+    let assets:
+      | {
+          [filePath: string]: FileFsRef;
+        }
+      | undefined;
+    const tracedFiles: {
+      [filePath: string]: FileFsRef;
+    } = {};
+    if (requiresTracing) {
+      const tracingLabel = 'Tracing Next.js lambdas for external files ...';
+      console.time(tracingLabel);
+
+      const { fileList } = await nodeFileTrace(
+        Object.keys(pages).map(page => pages[page].fsPath),
+        { base: workPath }
+      );
+      if (config.debug) {
+        debug(`node-file-trace result for pages: ${fileList}`);
+      }
+      fileList.forEach(file => {
+        tracedFiles[file] = new FileFsRef({
+          fsPath: path.join(workPath, file),
+        });
+      });
+
+      console.timeEnd(tracingLabel);
+    } else {
+      // An optional assets folder that is placed alongside every page
+      // entrypoint.
+      // This is a legacy feature that was needed before we began tracing
+      // lambdas.
+      assets = await glob(
+        'assets/**',
+        path.join(entryPath, '.next', 'serverless')
+      );
+
+      const assetKeys = Object.keys(assets!);
+      if (assetKeys.length > 0) {
+        debug('detected (legacy) assets to be bundled with lambda:');
+        assetKeys.forEach(assetFile => debug(`\t${assetFile}`));
+        debug(
+          '\nPlease upgrade to Next.js 9.1 to leverage modern asset handling.'
+        );
+      }
+    }
+
+    const launcherPath = path.join(__dirname, 'templated-launcher.js');
+    const launcherData = await readFile(launcherPath, 'utf8');
     await Promise.all(
       pageKeys.map(async page => {
         // These default pages don't have to be handled as they'd always 404
@@ -465,17 +531,34 @@ export const build = async ({
           dynamicPages.push(normalizePage(pathname));
         }
 
-        debug(`Creating lambda for page: "${page}"...`);
+        const label = `Creating lambda for page: "${page}"...`;
+        console.time(label);
+
+        const pageFileName = path.relative(workPath, pages[page].fsPath);
+        const launcher = launcherData.replace(
+          /__LAUNCHER_PAGE_PATH__/g,
+          JSON.stringify(
+            requiresTracing ? path.join('./', pageFileName) : './page'
+          )
+        );
+        const launcherFiles = {
+          'now__bridge.js': new FileFsRef({
+            fsPath: path.join(__dirname, 'now__bridge.js'),
+          }),
+          'now__launcher.js': new FileBlob({ data: launcher }),
+        };
+
         lambdas[path.join(entryDirectory, pathname)] = await createLambda({
           files: {
             ...launcherFiles,
             ...assets,
-            'page.js': pages[page],
+            ...tracedFiles,
+            [requiresTracing ? pageFileName : 'page.js']: pages[page],
           },
           handler: 'now__launcher.launcher',
           runtime: nodeVersion.runtime,
         });
-        debug(`Created lambda for page: "${page}"`);
+        console.timeEnd(label);
       })
     );
   }
